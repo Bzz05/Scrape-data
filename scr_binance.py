@@ -29,7 +29,10 @@ class BinanceScraper:
         "TA_LOOKBACK": 48,  # hours lookback for technical analysis
     }
 
-    def __init__(self, coins: List[str], resolutions: List[str], start_time: Optional[datetime], end_time: Optional[datetime], save_folder: str, endpoint_file_paths: Dict[str, Dict[str, str]], mode: str):
+    def __init__(self, coins: List[str], resolutions: List[str],
+                 start_time: Optional[datetime], end_time: Optional[datetime],
+                 save_folder: str, endpoint_file_paths: Dict[str, Dict[str, str]],
+                 mode: str):
         self.coins = coins
         self.resolutions = resolutions
         self.start_time = start_time
@@ -71,14 +74,20 @@ class BinanceScraper:
 
     def fetch_klines(self, coin: str, resolution: str) -> pd.DataFrame:
         '''
-        fetch klines data from binance
+        fetch klines data from Binance
         '''
         try:
+            # For historical mode, add one interval so that the final candle is included.
+            if self.mode == "historical":
+                adjusted_end = self.end_time + timedelta(minutes=self.CONFIG["INTERVALS"][resolution])
+            else:
+                adjusted_end = self.end_time
+
             klines = self.client.futures_historical_klines(
                 symbol=f"{coin}USDT",
                 interval=resolution,
                 start_str=self.start_time.strftime('%Y-%m-%d %H:%M:%S'),
-                end_str=self.end_time.strftime('%Y-%m-%d %H:%M:%S'),
+                end_str=adjusted_end.strftime('%Y-%m-%d %H:%M:%S'),
             )
             return pd.DataFrame(klines, columns=[
                 'open_time', 'open', 'high', 'low', 'close', 'volume', 'close_time',
@@ -90,28 +99,46 @@ class BinanceScraper:
 
     def process_klines(self, klines: pd.DataFrame, coin: str, resolution: str) -> pd.DataFrame:
         '''
-        process klines data and perform TA
+        process klines data and perform TA, then fill missing values.
         '''
+        
+        # convert columns to float64
         klines = klines[['open_time', 'open', 'high', 'low', 'close']].astype(np.float64)
         if self.mode == "live":
             klines = klines.iloc[:-1]  # Ignore the last incomplete candle
 
+        # convert timestamp and set index
         klines['open_time'] = pd.to_datetime(klines['open_time'], unit='ms')
         klines = klines.set_index("open_time")
         klines.index.name = None
 
-        # Apply technical analysis
+        # apply TA indicators
         metrics = sorted(self.endpoints_df[coin][resolution]["0"].tolist())
         strategy = ta.Strategy(name="MyStrategy", ta=[{"kind": item} for item in metrics])
         klines.ta.strategy(strategy)
 
-        # Rename columns to include resolution and coin
+        # rename columns to include resolution and coin
         klines.columns = [f"{col}_{self.CONFIG['INTERVALS'][resolution]:04}_{coin}" for col in klines.columns]
-        return klines
+
+        # create a placeholder index covering the entire time period
+        # use a frequency matching the resolution ('1h' becomes '1H', '1d' becomes '1D')
+        freq = resolution.upper()
+        start_str = self.start_time.strftime('%Y-%m-%d %H:%M:%S')
+        end_str = self.end_time.strftime('%Y-%m-%d %H:%M:%S')
+        
+
+        end_adjusted = pd.to_datetime(end_str) - pd.Timedelta("1ns")
+        placeholder = pd.DataFrame(index=pd.date_range(start=start_str, end=end_adjusted, freq=freq))
+        placeholder.index = placeholder.index.tz_localize(None)
+
+        # combine the placeholder with the computed klines and fill missing values
+        combined = placeholder.combine_first(klines)
+        combined = combined.fillna(method='ffill').fillna(method='bfill')
+        return combined
 
     def scrape(self):
         '''
-        main scraping func
+        scraping function
         '''
         current_time = datetime.now(timezone.utc)
         self.file_time = current_time.replace(second=0, microsecond=0, minute=(current_time.minute // 5) * 5)
@@ -136,19 +163,19 @@ class BinanceScraper:
 
                 # Save data
                 if self.mode == "live":
+                    # In live mode, we only save the most recent LOOKBACK period
                     processed_data.iloc[-self.CONFIG["LOOKBACK"]:].to_csv(
                         self.save_folder / f"{coin}_{resolution}.csv"
-                        # {self.file_time.strftime('%Y-%m-%d_%H:%M:%S')} -> make file name clearer
                     )
                 elif self.mode == "historical":
                     processed_data.to_csv(
                         self.save_folder / f"{coin}_{resolution}.csv"
-                        # {self.end_time.strftime('%Y-%m-%d_%H:%M:%S')} -> make filename clearer
                     )
+                    logging.info(f"Scraped historical data for {coin} {resolution} up to {self.end_time}")
 
     def run_periodic_scrape(self):
         '''
-        periodic scraping for live mode
+        periodic scraping for live mode.
         '''
         scheduler = BlockingScheduler()
         scheduler.add_job(self.scrape, 'cron', hour='*/1')
@@ -156,9 +183,6 @@ class BinanceScraper:
 
 
 def main(args):
-    '''
-    main func
-    '''
     save_folder_path = Path(args.save_folder)
     save_folder_path.mkdir(parents=True, exist_ok=True)
 
@@ -172,8 +196,9 @@ def main(args):
     if args.mode == "live":
         start_time = end_time = None
     elif args.mode == "historical":
-        start_time = datetime.fromisoformat(args.start_time)
-        end_time = datetime.fromisoformat(args.end_time)
+        # Attach UTC timezone to the parsed datetimes if needed.
+        start_time = datetime.fromisoformat(args.start_time).replace(tzinfo=timezone.utc)
+        end_time = datetime.fromisoformat(args.end_time).replace(tzinfo=timezone.utc)
 
     scraper = BinanceScraper(
         coins=args.coins.split(','),
@@ -192,15 +217,20 @@ def main(args):
     elif args.mode == "historical":
         scraper.scrape()
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Binance data scraper")
     parser.add_argument("--coins", required=True, help='e.g., "BTC,ETH,FTM,BAT"')
     parser.add_argument("--resolutions", required=True, help='e.g., "1h,1d"')
     parser.add_argument("--start_time", required=False, help='e.g., "2020-07-01T00:00:00"')
-    parser.add_argument("--end_time", required=False, help='e.g., "2024-04-11T00:00:00"')
+    parser.add_argument("--end_time", required=False, help='e.g., "2024-12-31T23:59:59"')
     parser.add_argument("--endpoint_file_paths", required=True, help="endpoints_path_binance.json")
-    parser.add_argument("--save_folder", required=True, help='file path to save scrape result')
-    parser.add_argument("--mode", required=True, help="scrape mode", choices=["historical", "live"])
+    parser.add_argument("--save_folder", required=True, help='File path to save scrape result')
+    parser.add_argument("--mode", required=True, help="Scrape mode", choices=["historical", "live"])
 
     args = parser.parse_args()
     main(args)
+
+'''
+1d csv size is to be expexted to be 24x smaller than 1h csv size
+'''
