@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+data/historical
+data/raw
+data/processed
+config/credentials.yaml
+checkpoint_*.pt
+.env
+env
+trading
+ui
+utils
+keys.py
+tests
