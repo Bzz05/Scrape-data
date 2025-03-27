@@ -26,8 +26,8 @@ project
 **Setup**
 ```
 # clone the repo
-git clone https://github.com/yourusername/binance-rl-trader.git
-cd binance-rl-trader
+git clone https://github.com/Bzz05/Scraping-TradeBot.git
+cd Scraping-TradeBot
 
 # create virtual env (recommended)
 python -m venv venv
