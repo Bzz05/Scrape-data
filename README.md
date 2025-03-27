@@ -35,6 +35,9 @@ cd Scraping-TradeBot
 python -m venv venv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 
+pip install --upgrade pip==21.0
+pip install --upgrade setuptools==57.5.0
+pip install --upgrade wheel==0.37.0
 pip install -r requirements.txt
 ```
 
