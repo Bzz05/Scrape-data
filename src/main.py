@@ -34,19 +34,19 @@ def load_configuration(config_path):
     return config
 
 def train_model(config_path, resume_checkpoint=None):
-    '''
+    """
     this 4 training
-    '''
+    """
     config = load_configuration(config_path)
     ModelCatalog.register_custom_model("rllib_transformer", RllibTransformerPolicy)
     
-    # get the processed data file from config.
+    # Get the processed data file from config.
     data_file = config.get("data_file", None)
     
-    # base RLlib configuration.
+    # Base RLlib configuration.
     rllib_config = config.get("rllib", {})
 
-    # check for GPU
+    # Check for GPU availability.
     if torch.cuda.is_available():
         rllib_config["num_gpus"] = 1
         logging.info("GPU detected. Using 1 GPU.")
@@ -54,7 +54,7 @@ def train_model(config_path, resume_checkpoint=None):
         rllib_config["num_gpus"] = 0
         logging.info("No GPU detected. Training on CPU.")
 
-    # merge additional settings.
+    # Merge additional settings.
     rllib_config.update({
         "env": "TradingEnv",
         "framework": "torch",
@@ -65,20 +65,19 @@ def train_model(config_path, resume_checkpoint=None):
         "horizon": config.get("horizon", 500),
     })
     
-    # register the custom environment.
+    # Register the custom environment.
     tune.register_env("TradingEnv", lambda cfg: TradingEnv(config_path, data_file=data_file))
     
-    # create the PPO trainer.
+    # Create the PPO trainer.
     agent = RllibPPOTrainer(config=rllib_config)
     
-    # to start from scratch, do NOT restore from a checkpoint.
+    # Optionally resume from a checkpoint.
     if resume_checkpoint:
         agent.restore(resume_checkpoint)
         logging.info(f"Resumed training from checkpoint: {resume_checkpoint}")
     
     total_timesteps = config.get("total_timesteps", 50000)
     timesteps = 0
-    last_checkpoint_time = time.time()
 
     cumulative_reward = 0.0
     progress_log = []
@@ -89,17 +88,15 @@ def train_model(config_path, resume_checkpoint=None):
     try:
         while timesteps < total_timesteps:
             result = agent.train()
-            # use available timesteps key.
             timesteps_in_iter = result.get("time_this_iter_s") or result.get("timesteps_this_batch")
             if timesteps_in_iter is None:
                 raise KeyError("No timesteps key found in training result. Keys: " + str(result.keys()))
             timesteps += timesteps_in_iter
             cumulative_reward += result["episode_reward_mean"]
 
-            # attempt to extract current balance from custom metrics.
+            # Extract current balance from custom metrics if available.
             current_balance = result.get("custom_metrics", {}).get("portfolio_value", None)
             
-            # append progress for this iteration.
             progress_log.append({
                 "iteration": result["training_iteration"],
                 "timesteps": timesteps,
@@ -117,15 +114,18 @@ def train_model(config_path, resume_checkpoint=None):
             # Save a checkpoint every 10 iterations.
             if result["training_iteration"] % 10 == 0:
                 checkpoint = agent.save()
-                last_checkpoint_time = time.time()
                 logging.info(f"Checkpoint saved at iteration {result['training_iteration']}: {checkpoint}")
             
             # Save progress log after every iteration.
             try:
                 pd.DataFrame(progress_log).to_csv(progress_filepath, index=False)
-                logging.info(f"Progress log saved to {progress_filepath}")
+                # logging.info(f"Progress log saved to {progress_filepath}")
             except Exception as csv_e:
                 logging.error(f"Error saving progress log: {csv_e}")
+                
+        final_checkpoint = agent.save()
+        logging.info(f"Final checkpoint saved at end of training: {final_checkpoint}")
+                
     except Exception as e:
         logging.error(f"Training interrupted: {e}. Saving final checkpoint.")
         checkpoint = agent.save()

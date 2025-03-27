@@ -4,24 +4,18 @@
 api_url: "https://testnet.binancefuture.com"  # testnet 4 futures
 
 # dims 4 obs and act
-obs_dim: 50
+obs_dim: 90
 act_dim: 3
 
-# model config (will be overriden by model_hyperparameters.yaml)
-model:
-  d_model: 128
-  nhead: 8
-  num_layers: 4
-
 trade_fraction: .1
-transaction_cost: .001
+transaction_cost: .002
 stop_loss_ratio: .05
 take_profit_ratio: .10
 initial_cash: 10000.0
 max_drawdown: .20
 
 # params 4 training
-learning_rate: 0.03
+learning_rate: 0.025
 total_timesteps: 100000
 trading_interval: 10  # s
 

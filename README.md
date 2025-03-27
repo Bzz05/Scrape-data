@@ -23,6 +23,8 @@ project
 │   └── 🚀 main.py                     # main training/execution script
 ```
 
+Using Python3.9 is recommended
+
 **Setup**
 ```
 # clone the repo

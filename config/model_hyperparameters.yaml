@@ -4,4 +4,4 @@ model:
   d_model: 256
   nhead: 12
   num_layers: 6
-learning_rate: 0.0025
+learning_rate: 0.025
