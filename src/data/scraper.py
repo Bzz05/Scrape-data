@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp
 import pandas as pd
+import sys
 import yaml
 import logging
 import json
@@ -27,7 +28,7 @@ class BinanceDataScraper:
                 "startTime": int(current_time.timestamp() * 1000),
                 "endTime": int(end_time.timestamp() * 1000)
             }
-            logging.info(f"Fetching klines for {symbol} from {current_time} to {end_time}")
+            # logging.info(f"Fetching klines for {symbol} from {current_time} to {end_time}")
             try:
                 async with self.session.get(f"{self.api_url}/fapi/v1/klines", params=params) as response:
                     data = await response.json()
@@ -97,4 +98,6 @@ async def main():
     await scraper.close()
 
 if __name__ == "__main__":
+    if sys.platform.startswith('win'):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

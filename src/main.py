@@ -6,32 +6,66 @@ import os
 import torch
 import yaml
 import pandas as pd
+import asyncio
 from ray import tune
 from ray.rllib.agents.ppo import PPOTrainer as RllibPPOTrainer
 from ray.rllib.models import ModelCatalog
 from models.rllib_policy import RllibTransformerPolicy
 from environment.trading_env import TradingEnv
+from data.processor import DataProcessor
+from data.scraper import BinanceDataScraper
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="RL Training for Binance Trading Bot")
+    parser.add_argument("--mode", type=str, choices=["train", "test", "api"], required=True, help="Mode of execution")
     parser.add_argument("--config", type=str, default="config/config.yaml", help="Path to configuration file")
     parser.add_argument("--model_path", type=str, default="checkpoint.pt", help="Path to model checkpoint (for resuming)")
     parser.add_argument("--log_level", type=str, default="INFO", help="Logging level")
     return parser.parse_args()
-
-def setup_logging(log_level="INFO"):
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper(), logging.INFO),
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)]
-    )
-    logging.info("Logging is set up.")
 
 def load_configuration(config_path):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
     logging.info("Configuration loaded.")
     return config
+
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+    logging.info("Logging is set up.")
+
+
+async def scrape_data(config_path):
+    scraper = BinanceDataScraper(config_path)
+    symbol = "BTCUSDT"
+    intervals = ["1d", "1h"]
+    start_time = pd.to_datetime("2019-09-01")
+    end_time = pd.to_datetime("2025-03-24")
+
+    for interval in intervals:
+        klines = await scraper.fetch_historical_klines(symbol, interval, start_time, end_time)
+        output_path = os.path.join("data/historical", f"klines_{interval}.csv")
+        klines.to_csv(output_path, index=False, date_format='%Y-%m-%d %H:%M:%S')
+        logging.info(f"Data saved to {output_path}")
+    
+    await scraper.close()
+
+
+def process_data(config_path):
+    processor = DataProcessor(config_path)
+    raw_data_files = ["klines_1d.csv", "klines_1h.csv"]
+    
+    for raw_data_file in raw_data_files:
+        raw_df = processor.load_raw_data(raw_data_file)
+        # process data.
+        processed_df = processor.process_data(raw_df)
+        
+        processed_filename = raw_data_file.split("_")[-1]
+        processor.save_processed_data(processed_df, processed_filename)
+
 
 def train_model(config_path, resume_checkpoint=None):
     """
@@ -108,7 +142,6 @@ def train_model(config_path, resume_checkpoint=None):
             logging.info(
                 f"Iteration: {result['training_iteration']}, timesteps: {timesteps:.2f}, "
                 f"reward: {result['episode_reward_mean']:.2f}, cumulative reward: {cumulative_reward:.2f}, "
-                f"current balance: {current_balance}"
             )
             
             # Save a checkpoint every 10 iterations.
@@ -136,14 +169,26 @@ def train_model(config_path, resume_checkpoint=None):
         except Exception as csv_e:
             logging.error(f"Error saving final progress log: {csv_e}")
 
+
 def main():
     args = parse_arguments()
-    setup_logging(args.log_level)
-    try:
+    setup_logging()
+
+    if args.mode == "train":
+        logging.info("start data scraping...")
+        asyncio.run(scrape_data(args.config))
+
+        logging.info("start data processing...")
+        process_data(args.config)
+
+        logging.info("start training...")
         train_model(args.config)
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        sys.exit(1)
+
+    else:
+        logging.error("Invalid mode selected.")
+
+    logging.info("Process complete.")
+
 
 if __name__ == "__main__":
     main()

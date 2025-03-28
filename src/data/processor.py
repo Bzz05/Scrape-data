@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import logging
 import yaml
-from feature_engineering import FeatureEngineer
+from data.feature_engineering import FeatureEngineer
 
 class DataProcessor:
     def __init__(self, config_path):
