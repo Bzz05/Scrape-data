@@ -5,6 +5,7 @@ import time
 import os
 import torch
 import yaml
+import numpy as np
 import pandas as pd
 import asyncio
 from ray import tune
@@ -69,7 +70,7 @@ def process_data(config_path):
 
 def train_model(config_path, resume_checkpoint=None):
     """
-    this 4 training
+    for training
     """
     config = load_configuration(config_path)
     ModelCatalog.register_custom_model("rllib_transformer", RllibTransformerPolicy)
@@ -113,7 +114,6 @@ def train_model(config_path, resume_checkpoint=None):
     total_timesteps = config.get("total_timesteps", 50000)
     timesteps = 0
 
-    cumulative_reward = 0.0
     progress_log = []
     progress_dir = os.path.join("data", "progress")
     os.makedirs(progress_dir, exist_ok=True)
@@ -126,22 +126,30 @@ def train_model(config_path, resume_checkpoint=None):
             if timesteps_in_iter is None:
                 raise KeyError("No timesteps key found in training result. Keys: " + str(result.keys()))
             timesteps += timesteps_in_iter
-            cumulative_reward += result["episode_reward_mean"]
-
-            # Extract current balance from custom metrics if available.
+            episode_rewards = result.get("hist_stats", {}).get("episode_reward", [])
+            median_reward = np.median(episode_rewards) if episode_rewards else 0
+            max_reward = max(episode_rewards) if episode_rewards else 0
+            min_reward = min(episode_rewards) if episode_rewards else 0
             current_balance = result.get("custom_metrics", {}).get("portfolio_value", None)
             
             progress_log.append({
-                "iteration": result["training_iteration"],
-                "timesteps": timesteps,
-                "episode_reward_mean": result["episode_reward_mean"],
-                "cumulative_reward": cumulative_reward,
-                "current_balance": current_balance,
-                "timestamp": time.time()
-            })
+                 "iteration": result["training_iteration"],
+                 "timesteps": timesteps,
+                 "mean_reward": result["episode_reward_mean"],
+                 "median_reward": median_reward,
+                 "max_reward": max_reward,
+                 "min_reward": min_reward,
+                 "current_balance": current_balance,
+                 "timestamp": time.time()
+             })
+            
             logging.info(
-                f"Iteration: {result['training_iteration']}, timesteps: {timesteps:.2f}, "
-                f"reward: {result['episode_reward_mean']:.2f}, cumulative reward: {cumulative_reward:.2f}, "
+                f"Iteration: {result['training_iteration']} | "
+                f"Timesteps: {timesteps} | "
+                f"Mean Reward: {result['episode_reward_mean']:.2f} | "
+                f"Median: {median_reward:.2f} | "
+                f"Max: {max_reward:.2f} | "
+                f"Min: {min_reward:.2f}"
             )
             
             # Save a checkpoint every 10 iterations.
