@@ -1,7 +1,7 @@
-Scraper + Processing + Trade Bot
-================================
+# Scraper + Processing + Trade Bot
 
 **Project Structure**
+
 ```
 project
 ├── 📁 config
@@ -26,6 +26,7 @@ project
 Using Python3.9 is recommended
 
 **Setup**
+
 ```
 # clone the repo
 git clone https://github.com/Bzz05/Scraping-TradeBot.git
@@ -42,19 +43,33 @@ pip install -r requirements.txt
 ```
 
 **Scrape**
+
 ```
 python src/data/scraper.py
 ```
 
 **Processing**
+
 ```
 python src/data/processor.py
 ```
 
 **Start Training**
+
 ```
 python3 src/main.py --mode train --config config/config.yaml
 ```
 
+**Run with Docker**
+
+```
+# build image
+docker build -t scraping-tradebot .
+
+# run container
+docker run --gpus all -it scraping-tradebot
+```
+
 ## License
+
 This project is licensed under the terms of the **MIT** license.
