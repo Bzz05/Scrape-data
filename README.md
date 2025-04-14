@@ -51,21 +51,15 @@ pip install --upgrade wheel==0.37.0
 pip install -r requirements.txt
 ```
 
-**Scrape**
-
+**Scrape + Processing + Training**
 ```
+# scraping
 python src/data/scraper.py
-```
 
-**Processing**
-
-```
+# processing
 python src/data/processor.py
-```
 
-**Start Training**
-
-```
+# start training
 python3 src/main.py --mode train --config config/config.yaml
 ```
 
