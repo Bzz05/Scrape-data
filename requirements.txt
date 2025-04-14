@@ -6,8 +6,9 @@ apscheduler
 requests
 matplotlib
 ipykernel
-gym==0.20.0
-ray[rllib]==1.13.0
+gym==0.21.0
+pydantic==1.10.13
+ray[rllib]==2.2.0
 torch
 pyyaml
 ta
@@ -16,3 +17,6 @@ raylib-py
 flask
 gputil
 pytest
+pyspark
+fastapi
+uvicorn

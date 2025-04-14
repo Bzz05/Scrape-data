@@ -1,29 +1,38 @@
 # Scraper + Processing + Trade Bot
 
+Using Python3.9 is recommended
+
 **Project Structure**
 
 ```
 project
 ├── 📁 config
-│   ├── 🔧 config.yaml                # main configuration file
-│   └── 🛠️ model_hyperparameters.yaml # model-specific hyperparameters
+│   ├── 🔧 config.yaml                  # main configuration file
+│   └── 🛠️ model_hyperparameters.yaml   # model-specific hyperparameters
+│
+├── 📁 kind
+│   └── ⚙️ kind-config.yaml             # kind cluster configuration
+│
+├── 📁 k8s
+│   ├── 📦 deployment.yaml              # Kubernetes Deployment spec
+│   └── 🌐 service.yaml                 # Kubernetes Service spec
+│
+├── 🐳 Dockerfile                       # Docker image definition
 │
 ├── 📂 src
 │   ├── 📊 data
-│   │   ├── 🧮 feature_engineering.py  # feature engineering
-│   │   ├── 🔬 processor.py            # processing utilities
-│   │   └── 🕸️ scraper.py              # scraping scripts
+│   │   ├── 🧮 feature_engineering.py    # feature engineering
+│   │   ├── 🔬 processor.py              # processing utilities
+│   │   └── 🕸️ scraper.py                # scraping scripts
 │   │
 │   ├── 🤖 environment
-│   │   └── 🎮 trading_env.py          # trading environment for RL
+│   │   └── 🎮 trading_env.py            # trading environment for RL
 │   │
 │   ├── 🧠 models
-│   │   └── 📈 rllib_policy.py         # RLlib policy implementation
+│   │   └── 📈 rllib_policy.py           # RLlib policy implementation
 │   │
-│   └── 🚀 main.py                     # main training/execution script
+│   └── 🚀 main.py                       # main training/execution script
 ```
-
-Using Python3.9 is recommended
 
 **Setup**
 
@@ -36,7 +45,7 @@ cd Scraping-TradeBot
 python -m venv venv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 
-pip install --upgrade pip==21.0
+pip install --upgrade pip==22.0
 pip install --upgrade setuptools==57.5.0
 pip install --upgrade wheel==0.37.0
 pip install -r requirements.txt
@@ -64,10 +73,31 @@ python3 src/main.py --mode train --config config/config.yaml
 
 ```
 # build image
-docker build -t scraping-tradebot .
+docker build -t trading-bot:latest .
 
 # run container
-docker run --gpus all -it scraping-tradebot
+docker run --gpus all -it trading-bot:latest
+```
+
+**To use Kubernetes (local testing with kind)**
+```
+# build image for Kubernetess to use
+docker build -t trading-bot:latest
+
+# make cluster
+kind create cluster --config kind-config.yaml
+
+# load the docker image to kind
+kind load docker-image trading-bot:latest
+
+# deploy and expose the service
+kubectl apply -f k8s/
+
+# port forward
+kubectl port-forward svc/trading-bot-service 8080:80
+
+# browse live logs
+http://localhost:8080/logs
 ```
 
 ## License

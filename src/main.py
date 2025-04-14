@@ -8,6 +8,8 @@ import yaml
 import numpy as np
 import pandas as pd
 import asyncio
+import threading
+import queue
 from ray import tune
 from ray.rllib.agents.ppo import PPOTrainer as RllibPPOTrainer
 from ray.rllib.models import ModelCatalog
@@ -15,6 +17,26 @@ from models.rllib_policy import RllibTransformerPolicy
 from environment.trading_env import TradingEnv
 from data.processor import DataProcessor
 from data.scraper import BinanceDataScraper
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, StreamingResponse
+import uvicorn
+
+log_queue = queue.Queue()
+log_lines = []
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    logging.info("Launching FastAPI log server...")
+    return {"message": "Training bot server running."}
+
+@app.get("/logs")
+def get_logs():
+    # Return logs as a JSON response
+    return JSONResponse(content={"logs": log_lines})
+
+def launch_log_server():
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="RL Training for Binance Trading Bot")
@@ -143,7 +165,7 @@ def train_model(config_path, resume_checkpoint=None):
                  "timestamp": time.time()
              })
             
-            logging.info(
+            log_msg = (
                 f"Iteration: {result['training_iteration']} | "
                 f"Timesteps: {timesteps} | "
                 f"Mean Reward: {result['episode_reward_mean']:.2f} | "
@@ -151,6 +173,9 @@ def train_model(config_path, resume_checkpoint=None):
                 f"Max: {max_reward:.2f} | "
                 f"Min: {min_reward:.2f}"
             )
+            logging.info(log_msg)
+            log_lines.append(log_msg)
+            log_queue.put(log_msg)
             
             # Save a checkpoint every 10 iterations.
             if result["training_iteration"] % 10 == 0:
@@ -183,6 +208,15 @@ def main():
     setup_logging()
 
     if args.mode == "train":
+        logging.info("Starting log server thread...")
+        try:
+            t = threading.Thread(target=launch_log_server, daemon=True)
+            t.start()
+            time.sleep(2)
+            logging.info("Log server thread started.")
+        except Exception as e:
+            logging.error(f"Failed to start log server: {e}")
+
         logging.info("start data scraping...")
         asyncio.run(scrape_data(args.config))
 
