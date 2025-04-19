@@ -16,7 +16,8 @@ max_drawdown: .20
 
 # params 4 training
 learning_rate: 0.025
-total_timesteps: 100000
+#100000
+total_timesteps: 40000
 trading_interval: 10  # s
 
 rllib:

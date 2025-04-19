@@ -67,7 +67,7 @@ def process_data(config_path):
         processor.save_processed_data(processed_df, processed_filename)
 
 
-def train_model(config_path, resume_checkpoint=None):
+def train_model(config_path, resume_checkpoint="C:\2. Code Repository\200. Projects\PeanutFund\Scraping-TradeBot\ray_results\PPOTrainer_TradingEnv_2025-03-29_00-08-509l8rf9g4\checkpoint_001370"):
     """
     this 4 training
     """
